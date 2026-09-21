@@ -31,6 +31,20 @@ The relay owns registration, mailbox persistence, delivery, retry and acknowledg
 ## Requirements
 
 - JDK 21
+```bash 
+# macOS Using Homebrew:
+brew install openjdk@21
+
+# Windows Using winget:
+winget install EclipseAdoptium.Temurin.21.JDK
+
+# Ubuntu / Debian:
+sudo apt update
+sudo apt install openjdk-21-jdk
+
+# Verify the installation:
+java -version
+```
 - The included Gradle wrapper (`./gradlew`)
 
 ## Build and test
@@ -99,7 +113,7 @@ Server events:
 - `Delivery`
 - `ProtocolError`
 
-`message_id` is a client-generated UUID. A client should register before sending or acknowledging. Application-level validation errors are returned on the stream and are non-fatal; transport-level failures may terminate the stream.
+`message_id` is a client-generated UUID used as the unique identifier for a message. It allows the server to correlate send results such as `SendAccepted` or `SendRejected`, identify duplicate sends, and match acknowledgements to the correct delivered message.
 
 ## Delivery semantics
 
@@ -234,9 +248,14 @@ After the acknowledgement succeeds, the message is removed from Bob's unacknowle
 The queued message should be delivered after registration.
 
 
-## (Optional) Docker
+## Docker (Optional)
+- For Mac - https://docs.docker.com/desktop/setup/install/mac-install/
+- For Window - https://docs.docker.com/desktop/setup/install/windows-install/
+- For Linux - https://docs.docker.com/desktop/setup/install/linux/
 
 Docker support is included as an optional way to build and run the relay in a reproducible container.
+### Install Docker
+
 
 ### Build the image
 

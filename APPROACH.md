@@ -76,8 +76,8 @@ The backing map is a `ConcurrentHashMap`, so read-only lookup through `findActiv
 
 Each `ClientConnection` has a `ReentrantLock` used for two related responsibilities:
 
-1. serialize calls to the server-side `StreamObserver`, because concurrent writes to the same gRPC stream are not allowed;
-2. protect `inFlightSeqNo`, the connection-local record of the message currently awaiting an ACK.
+1. serialize calls to the server-side `StreamObserver`, because concurrent writes to the same gRPC stream are not allowed
+2. protect `inFlightSeqNo`, the connection-local record of the message currently awaiting an ACK
 
 `DeliveryService.deliverNextMessageIfReady()` uses `tryLock()` rather than blocking a delivery worker behind another operation on the same client. If that connection is busy, the attempt returns and periodic recovery or the next ACK/on-ready callback will try again. This keeps a slow or busy recipient from occupying a worker while unrelated clients continue.
 
@@ -145,28 +145,28 @@ Tests are intentionally focused on the documented relay behavior rather than exh
 
 Covered areas include:
 
-- registration and duplicate/limit behavior;
-- send validation and rejection mapping;
-- direct H2 mailbox state transitions and capacity handling;
-- concurrent claim of one queued row;
-- concurrent duplicate UUID insertion;
-- online delivery and ACK deletion;
-- offline retention and replay after reconnect;
-- redelivery after disconnect and ACK timeout;
-- recipient FIFO behavior, including concurrent senders;
-- TTL expiry and recovery after an expired in-flight row;
-- storage/executor failure handling and shutdown paths;
+- registration and duplicate/limit behavior
+- send validation and rejection mapping
+- direct H2 mailbox state transitions and capacity handling
+- concurrent claim of one queued row
+- concurrent duplicate UUID insertion
+- online delivery and ACK deletion
+- offline retention and replay after reconnect
+- redelivery after disconnect and ACK timeout
+- recipient FIFO behavior, including concurrent senders
+- TTL expiry and recovery after an expired in-flight row
+- storage/executor failure handling and shutdown paths
 - persistence behavior using file-backed storage where relevant.
 
 The integration harness uses an in-process gRPC transport with an executor and isolated in-memory H2 databases. The executor is intentional: `directExecutor()` can create re-entrant call ordering that is not representative of the production Netty transport and can manufacture lock behavior that would not occur in the deployed server.
 
 Not covered:
 
-- client-side retry/backoff behavior after a `retryable=true` response; the client implementation is outside the repository;
-- throughput/latency benchmarking, because no performance target is claimed;
-- multi-node coordination, because the implementation is explicitly single-node;
-- TLS/authentication, which are excluded by the exercise;
-- every theoretically possible thread interleaving; targeted race tests instead verify the important database and delivery arbitration points.
+- client-side retry/backoff behavior after a `retryable=true` response; the client implementation is outside the repository
+- throughput/latency benchmarking, because no performance target is claimed
+- multi-node coordination, because the implementation is explicitly single-node
+- TLS/authentication, which are excluded by the exercise
+- every theoretically possible thread interleaving; targeted race tests instead verify the important database and delivery arbitration points
 
 All waits in integration tests are bounded so failures terminate deterministically rather than hanging the test suite.
 
@@ -189,13 +189,13 @@ All waits in integration tests are bounded so failures terminate deterministical
 I used AI-assisted development tools primarily for design and review support.
 
 AI was used to help:
-- interpret and break down the exercise requirements;
-- identify missing or ambiguous behaviours, including retry, acknowledgement, reconnect, duplicate-message and resource-limit semantics;
-- propose the overall project structure, class responsibilities, method boundaries, dependencies, and directory layout;
-- review concurrency concerns and suggest where application-level locking or database-level atomic operations were appropriate;
-- suggest test cases and identify edge cases or failure scenarios that should be covered;
-- review documentation for consistency with the implemented behaviour and known limitations.
+- interpret and break down the exercise requirements
+- identify missing or ambiguous behaviours, including retry, acknowledgement, reconnect, duplicate-message and resource-limit semantics
+- review the implemented concurrency design as a second check, particularly the use of application-level locking versus database-level atomic operations
+- identify test cases which is missed or failure scenarios that should be covered
+- use focused prompts containing implementation details, runtime behavior, and observed test results to help draft and refine APPROACH.md, README.md and Dockerfile so that it reflected the actual system
 
+I used AI iteratively rather than with a single broad prompt. I first broke the exercise into requirements and design decisions, then used focused prompts for protocol behavior, concurrency, retry semantics, class boundaries, and test coverage.
 I reviewed the suggestions against the exercise requirements and the actual implementation, and adjusted or rejected suggestions where they added unnecessary complexity or did not match the intended behaviour.
 
 ## Next steps
