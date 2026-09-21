@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+package relay.v1;
+
+option java_multiple_files = true;
+option java_package = "com.example.relay.proto";
+option java_outer_classname = "RelayProto";
+
+// Single bidirectional stream per client connection.
+// Register before Send or Ack; earlier requests receive a recoverable protocol error.
+service MessageRelay {
+  rpc Connect(stream ClientEvent) returns (stream ServerEvent);
+}
+
+// ---------- client -> server ----------
+
+message ClientEvent {
+  oneof event {
+    Register register = 1;
+    Send send = 2;
+    Ack ack = 3;
+  }
+}
+
+message Register {
+  string client_id = 1;
+}
+
+message Send {
+  // Client-generated UUID. Used for idempotency / duplicate detection.
+  string message_id = 1;
+  string recipient_id = 2;
+  string content = 3;
+}
+
+message Ack {
+  string message_id = 1;
+}
+
+// ---------- server -> client ----------
+
+message ServerEvent {
+  oneof event {
+    Registered registered = 1;
+    SendAccepted send_accepted = 2;
+    SendRejected send_rejected = 3;
+    Delivery delivery = 4;
+    ProtocolError protocol_error = 5;
+  }
+}
+
+message Registered {
+  string client_id = 1;
+  // Number of unacknowledged messages replayed right after registration.
+  int64 unacked_messages = 2;
+}
+
+message SendAccepted {
+  string message_id = 1;
+  int64 seq_no = 2;
+}
+
+message SendRejected {
+  string message_id = 1;
+  SendRejectionReason reason = 2;
+  // Whether the unchanged request may be retried; rejection does not close the stream.
+  bool retryable = 3;
+  string detail = 4;
+}
+
+message Delivery {
+  string message_id = 1;
+  string sender_id = 2;
+  string content = 3;
+  int64 seq_no = 4;
+  // true when this message has been pushed to this recipient before.
+  bool redelivery = 5;
+  int64 sent_at_epoch_millis = 6;
+}
+
+message ProtocolError {
+  ProtocolErrorCode code = 1;
+  bool retryable = 2;
+  bool fatal = 3;
+  string detail = 4;
+}
+
+enum SendRejectionReason {
+  SEND_REJECTION_REASON_UNSPECIFIED = 0;
+  INVALID_MESSAGE = 1;
+  MESSAGE_TOO_LARGE = 2;
+  RESOURCE_EXHAUSTED = 3;
+  DUPLICATE_ID_CONFLICT = 4;
+  STORAGE_FAILURE = 5;
+}
+
+enum ProtocolErrorCode {
+  PROTOCOL_ERROR_CODE_UNSPECIFIED = 0;
+  REGISTER_REQUIRED = 1;
+  INVALID_REGISTRATION = 2;
+  ALREADY_REGISTERED = 3;
+  ALREADY_EXISTS = 4;
+  CONNECTION_LIMIT_REACHED = 5;
+  INVALID_EVENT = 6;
+  ACK_WRONG_RECIPIENT = 7;
+  ACK_UNKNOWN = 8;
+  ACK_NOT_IN_FLIGHT = 9;
+  STORAGE_UNAVAILABLE = 10;
+  // Reserved: buffer overflow now closes the stream with gRPC RESOURCE_EXHAUSTED.
+  OUTBOUND_BUFFER_FULL = 11;
+}
