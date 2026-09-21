@@ -4,6 +4,30 @@ A small Java 21 client/server message relay implemented with gRPC. Clients open 
 
 The relay owns registration, mailbox persistence, delivery, retry and acknowledgement logic directly; no broker or queue product is used.
 
+
+## Table of Contents
+
+- [Requirements](#requirements)
+- [Build and test](#build-and-test)
+- [Configuration](#configuration)
+- [Protocol](#protocol)
+- [Delivery semantics](#delivery-semantics)
+- [Persistence and schema](#persistence-and-schema)
+- [Project structure](#project-structure)
+- [Testing](#testing)
+- [Connect helper script](#connect-helper-script)
+  - [Terminal 1 - Start the server](#terminal-1---start-the-server)
+  - [Terminal 2 - Connect and register Alice](#terminal-2---connect-and-register-alice)
+  - [Terminal 3 - Connect and register Bob](#terminal-3---connect-and-register-bob)
+  - [Send a message from Alice to Bob](#send-a-message-from-alice-to-bob)
+  - [Acknowledge the message from Bob](#acknowledge-the-message-from-bob)
+  - [Optional - Verify offline delivery](#optional---verify-offline-delivery)
+- [Docker (Optional)](#optional-docker)
+  - [Build the image](#build-the-image)
+  - [Run the container](#run-the-container)
+  - [Check the running container](#check-the-running-container)
+  - [Stop and remove the container](#stop-and-remove-the-container)
+
 ## Requirements
 
 - JDK 21
@@ -208,3 +232,52 @@ After the acknowledgement succeeds, the message is removed from Bob's unacknowle
 ```
 
 The queued message should be delivered after registration.
+
+
+## (Optional) Docker
+
+Docker support is included as an optional way to build and run the relay in a reproducible container.
+
+### Build the image
+
+From the project root:
+
+```bash
+docker build -t message-relay .
+```
+
+### Run the container
+
+```bash
+docker run --name message-relay \
+  -p 50051:50051 \
+  -v message-relay-data:/app/data \
+  message-relay
+```
+
+The container exposes gRPC on port `50051`.
+
+The named volume `message-relay-data` is mounted at `/app/data` so the file-based H2 database can remain available even if the container is removed and recreated.
+
+### Check the running container
+
+```bash
+docker ps
+docker logs message-relay
+```
+
+### Stop and remove the container
+
+```bash
+docker stop message-relay
+docker rm message-relay
+```
+
+To start it again with the same persisted database:
+
+```bash
+docker run --name message-relay \
+  -p 50051:50051 \
+  -v message-relay-data:/app/data \
+  message-relay
+```
