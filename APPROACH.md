@@ -85,23 +85,27 @@ ACK handling and timeout recovery take the same connection lock before clearing 
 
 ### Mailbox admission lock
 
-`MailboxStore.enqueue()` uses a single `admissionLock` only when a new message is accepted into the mailbox.
+`MailboxStore.enqueue()` uses one `admissionLock`. Enqueue is not a single SQL statement: it checks duplicate UUID state, checks the per-recipient count, checks the server-wide count, and then inserts. Those count-and-insert checks form one admission invariant. Without serialization, two concurrent transactions could both observe remaining capacity and both insert, exceeding a configured limit.
 
-The workflow is:
+The entire sequence runs inside one database transaction and rolls back on failure.
 
-```text
-SEND request
-→ check duplicate message ID
-→ check recipient mailbox limit
-→ check server-wide mailbox limit
-→ insert message
+### Why most database operations do not take the Java admission lock
+
+Most other mailbox operations are implemented as atomic SQL predicates and therefore do not need the application-level admission lock.
+
+For example, claiming a message uses the equivalent of:
+
+```sql
+UPDATE MAILBOX
+SET STATUS = 'IN_FLIGHT', ...
+WHERE SEQ_NO = ? AND STATUS = 'QUEUED'
 ```
 
-These checks need to behave as one operation. Without the lock, two concurrent sends could both observe available capacity and both insert, causing a configured mailbox limit to be exceeded.
-The whole workflow also runs inside one database transaction, so any failure rolls the operation back.
-Other mailbox operations do not use this Java lock because they rely on conditional SQL updates. For example, delivery changes a message from QUEUED to IN_FLIGHT only if it is still QUEUED. If two workers race, the database allows only one update to succeed. The same pattern is used for requeue and acknowledgement.
-In short, the admission lock protects multi-step admission checks during enqueue, while the database handles concurrency for single-message state transitions.
+If two workers race to claim the same row, the database serializes the row update and only one statement can update one row; the other receives an update count of zero. The same pattern is used when requeueing an `IN_FLIGHT` row. ACK deletion also has the recipient in its SQL predicate, so another client's ACK cannot delete the row.
 
+Simple reads such as `findByMessageId`, `loadNext`, timeout scans and count diagnostics also do not need the Java lock. A read can become stale immediately under concurrency, so correctness does not depend on the read alone: the following conditional `UPDATE` or `DELETE` is the arbitration point. For example, two workers may both read the same oldest queued message, but only one can change `QUEUED -> IN_FLIGHT`.
+
+H2 also owns `SEQ_NO` generation through its auto-increment identity column, so Java does not keep or lock a sequence counter. The file database persists both rows and identity state across restart.
 
 ## Resource bounds and isolation
 
@@ -182,18 +186,17 @@ All waits in integration tests are bounded so failures terminate deterministical
 
 ## AI-assisted development
 
-AI-assisted development was used as a review and implementation aid. It was used to:
+I used AI-assisted development tools primarily for design and review support.
 
-- review the exercise requirements and check whether any required behavior had been omitted;
-- discuss retry/redelivery mechanisms, failure cases and known limitations;
-- propose class and method boundaries that could then be implemented and reviewed;
-- help organize the project directory structure and Gradle dependencies;
-- suggest test cases for concurrency, reconnect, acknowledgement and failure paths;
-- review documentation for consistency with the implemented behavior.
+AI was used to help:
+- interpret and break down the exercise requirements;
+- identify missing or ambiguous behaviours, including retry, acknowledgement, reconnect, duplicate-message and resource-limit semantics;
+- propose the overall project structure, class responsibilities, method boundaries, dependencies, and directory layout;
+- review concurrency concerns and suggest where application-level locking or database-level atomic operations were appropriate;
+- suggest test cases and identify edge cases or failure scenarios that should be covered;
+- review documentation for consistency with the implemented behaviour and known limitations.
 
-The decisive design choices and final behavior were made and verified by the candidate. In particular, the protocol shape, registration lifecycle, H2 mailbox model, FIFO strategy, one-message-in-flight policy, locking locations, persistence choice, retry semantics, resource limits and error/retryability policy were explicitly reviewed and selected by the candidate rather than accepted automatically from AI output.
-
-AI suggestions were treated as proposals rather than authoritative output. Suggested behavior was checked against the exercise requirements and the code, and the implementation was validated with focused unit tests and end-to-end gRPC integration tests. The candidate remains responsible for explaining, modifying and defending every submitted class and method.
+I reviewed the suggestions against the exercise requirements and the actual implementation, and adjusted or rejected suggestions where they added unnecessary complexity or did not match the intended behaviour.
 
 ## Next steps
 
